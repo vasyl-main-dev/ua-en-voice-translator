@@ -1,3 +1,4 @@
+from pathlib import Path
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,7 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.translator import Translator
+from app.services.audio_recorder import AudioRecorder
+from app.services.speech_recognizer import SpeechRecognizer
 from app.workers.translation_worker import TranslationWorker
+from app.workers.voice_processing_worker import VoiceProcessingWorker
 
 
 class MainWindow(QMainWindow):
@@ -24,8 +28,24 @@ class MainWindow(QMainWindow):
 
         self.translator = Translator()
 
+        self.audio_recorder = AudioRecorder()
+
+        self.speech_recognizer = SpeechRecognizer(
+            model_size="small",
+            device="cuda",
+            compute_type="float16",
+        )
+
+        project_root = Path(__file__).resolve().parents[2]
+        self.recording_path = (
+                project_root / "recordings" / "latest_recording.wav"
+        )
+
         self.translation_thread: QThread | None = None
         self.translation_worker: TranslationWorker | None = None
+
+        self.voice_thread: QThread | None = None
+        self.voice_worker: VoiceProcessingWorker | None = None
 
         self.setWindowTitle("UA ↔ EN Voice Translator")
         self.resize(1000, 650)
@@ -157,9 +177,213 @@ class MainWindow(QMainWindow):
         )
 
     def handle_record(self) -> None:
+        if self.audio_recorder.is_recording:
+            self.stop_recording()
+        else:
+            self.start_recording()
+
+    def start_recording(self) -> None:
+        if self.voice_thread is not None:
+            self.statusBar().showMessage(
+                "Попередній запис ще обробляється"
+            )
+            return
+
+        try:
+            self.audio_recorder.start()
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Помилка запису",
+                str(error),
+            )
+            return
+
+        self.source_text_edit.clear()
+        self.translation_text_edit.clear()
+
+        self.set_recording_running(True)
         self.statusBar().showMessage(
-            "Запис мікрофона буде підключено на наступних етапах"
+            "Записування... Натисніть кнопку ще раз для завершення"
         )
+
+    def stop_recording(self) -> None:
+        try:
+            audio_path = self.audio_recorder.stop(
+                self.recording_path
+            )
+        except Exception as error:
+            self.set_recording_running(False)
+
+            QMessageBox.critical(
+                self,
+                "Помилка запису",
+                str(error),
+            )
+            return
+
+        self.set_recording_running(False)
+        self.start_voice_processing(audio_path)
+
+    def set_recording_running(self, is_recording: bool) -> None:
+        self.swap_button.setDisabled(is_recording)
+        self.translate_button.setDisabled(is_recording)
+        self.copy_button.setDisabled(is_recording)
+        self.clear_button.setDisabled(is_recording)
+
+        if is_recording:
+            self.record_button.setText("⏹ Зупинити")
+        else:
+            self.record_button.setText("🎤 Записати")
+
+    def start_voice_processing(
+            self,
+            audio_path: Path,
+    ) -> None:
+        if self.voice_thread is not None:
+            return
+
+        self.set_voice_processing_running(True)
+        self.statusBar().showMessage(
+            "Підготовка до розпізнавання..."
+        )
+
+        self.voice_thread = QThread(self)
+
+        self.voice_worker = VoiceProcessingWorker(
+            audio_path=audio_path,
+            speech_recognizer=self.speech_recognizer,
+            translator=self.translator,
+            source_language=self.source_language,
+            target_language=self.target_language,
+        )
+
+        self.voice_worker.moveToThread(self.voice_thread)
+
+        self.voice_thread.started.connect(
+            self.voice_worker.run
+        )
+
+        self.voice_worker.stage_changed.connect(
+            self.statusBar().showMessage
+        )
+        self.voice_worker.recognized.connect(
+            self.source_text_edit.setPlainText
+        )
+        self.voice_worker.translated.connect(
+            self.handle_voice_translation_finished
+        )
+        self.voice_worker.failed.connect(
+            self.handle_voice_processing_failed
+        )
+
+        self.voice_worker.finished.connect(
+            self.voice_thread.quit
+        )
+        self.voice_worker.finished.connect(
+            self.voice_worker.deleteLater
+        )
+
+        self.voice_thread.finished.connect(
+            self.cleanup_voice_thread
+        )
+        self.voice_thread.finished.connect(
+            self.voice_thread.deleteLater
+        )
+
+        self.voice_thread.start()
+
+        def handle_voice_translation_finished(
+                self,
+                translated_text: str,
+        ) -> None:
+            self.translation_text_edit.setPlainText(
+                translated_text
+            )
+            self.statusBar().showMessage(
+                "Голосовий переклад завершено"
+            )
+
+        def handle_voice_processing_failed(
+                self,
+                error_message: str,
+        ) -> None:
+            self.statusBar().showMessage(
+                "Помилка голосової обробки"
+            )
+
+            QMessageBox.critical(
+                self,
+                "Помилка голосового перекладу",
+                error_message,
+            )
+
+        def cleanup_voice_thread(self) -> None:
+            self.voice_worker = None
+            self.voice_thread = None
+
+            self.set_voice_processing_running(False)
+
+        def set_voice_processing_running(
+                self,
+                is_running: bool,
+        ) -> None:
+            self.record_button.setDisabled(is_running)
+            self.translate_button.setDisabled(is_running)
+            self.swap_button.setDisabled(is_running)
+            self.copy_button.setDisabled(is_running)
+            self.clear_button.setDisabled(is_running)
+
+            if is_running:
+                self.record_button.setText("Обробка...")
+            else:
+                self.record_button.setText("🎤 Записати")
+
+    def handle_voice_translation_finished(
+            self,
+            translated_text: str,
+    ) -> None:
+        self.translation_text_edit.setPlainText(
+            translated_text
+        )
+        self.statusBar().showMessage(
+            "Голосовий переклад завершено"
+        )
+
+    def handle_voice_processing_failed(
+            self,
+            error_message: str,
+    ) -> None:
+        self.statusBar().showMessage(
+            "Помилка голосової обробки"
+        )
+
+        QMessageBox.critical(
+            self,
+            "Помилка голосового перекладу",
+            error_message,
+        )
+
+    def cleanup_voice_thread(self) -> None:
+        self.voice_worker = None
+        self.voice_thread = None
+
+        self.set_voice_processing_running(False)
+
+    def set_voice_processing_running(
+            self,
+            is_running: bool,
+    ) -> None:
+        self.record_button.setDisabled(is_running)
+        self.translate_button.setDisabled(is_running)
+        self.swap_button.setDisabled(is_running)
+        self.copy_button.setDisabled(is_running)
+        self.clear_button.setDisabled(is_running)
+
+        if is_running:
+            self.record_button.setText("Обробка...")
+        else:
+            self.record_button.setText("🎤 Записати")
 
     def handle_translate(self) -> None:
         source_text = self.source_text_edit.toPlainText().strip()
@@ -257,6 +481,8 @@ class MainWindow(QMainWindow):
         self.translate_button.setDisabled(is_running)
         self.swap_button.setDisabled(is_running)
         self.record_button.setDisabled(is_running)
+        self.copy_button.setDisabled(is_running)
+        self.clear_button.setDisabled(is_running)
 
         if is_running:
             self.translate_button.setText("Перекладаємо...")
