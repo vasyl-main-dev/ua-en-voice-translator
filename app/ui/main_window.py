@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -8,7 +8,11 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QMessageBox,
 )
+
+from app.services.translator import Translator
+from app.workers.translation_worker import TranslationWorker
 
 
 class MainWindow(QMainWindow):
@@ -17,6 +21,11 @@ class MainWindow(QMainWindow):
 
         self.source_language = "uk"
         self.target_language = "en"
+
+        self.translator = Translator()
+
+        self.translation_thread: QThread | None = None
+        self.translation_worker: TranslationWorker | None = None
 
         self.setWindowTitle("UA ↔ EN Voice Translator")
         self.resize(1000, 650)
@@ -159,9 +168,50 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Спочатку введіть текст")
             return
 
-        self.statusBar().showMessage(
-            "Модель перекладу ще не підключена"
+        if self.translation_thread is not None:
+            self.statusBar().showMessage("Переклад уже виконується")
+            return
+
+        self.set_translation_running(True)
+        self.statusBar().showMessage("Виконується переклад...")
+
+        self.translation_thread = QThread(self)
+
+        self.translation_worker = TranslationWorker(
+            translator=self.translator,
+            text=source_text,
+            source_language=self.source_language,
+            target_language=self.target_language,
         )
+
+        self.translation_worker.moveToThread(self.translation_thread)
+
+        self.translation_thread.started.connect(
+            self.translation_worker.run
+        )
+
+        self.translation_worker.translation_finished.connect(
+            self.handle_translation_finished
+        )
+        self.translation_worker.translation_failed.connect(
+            self.handle_translation_failed
+        )
+
+        self.translation_worker.finished.connect(
+            self.translation_thread.quit
+        )
+        self.translation_worker.finished.connect(
+            self.translation_worker.deleteLater
+        )
+
+        self.translation_thread.finished.connect(
+            self.cleanup_translation_thread
+        )
+        self.translation_thread.finished.connect(
+            self.translation_thread.deleteLater
+        )
+
+        self.translation_thread.start()
 
     def copy_translation(self) -> None:
         translation = self.translation_text_edit.toPlainText()
@@ -177,3 +227,38 @@ class MainWindow(QMainWindow):
         self.source_text_edit.clear()
         self.translation_text_edit.clear()
         self.statusBar().showMessage("Текст очищено")
+
+    def handle_translation_finished(
+            self,
+            translated_text: str,
+    ) -> None:
+        self.translation_text_edit.setPlainText(translated_text)
+        self.statusBar().showMessage("Переклад завершено")
+        self.set_translation_running(False)
+
+    def handle_translation_failed(
+            self,
+            error_message: str,
+    ) -> None:
+        self.statusBar().showMessage("Помилка перекладу")
+        self.set_translation_running(False)
+
+        QMessageBox.critical(
+            self,
+            "Помилка перекладу",
+            error_message,
+        )
+
+    def cleanup_translation_thread(self) -> None:
+        self.translation_worker = None
+        self.translation_thread = None
+
+    def set_translation_running(self, is_running: bool) -> None:
+        self.translate_button.setDisabled(is_running)
+        self.swap_button.setDisabled(is_running)
+        self.record_button.setDisabled(is_running)
+
+        if is_running:
+            self.translate_button.setText("Перекладаємо...")
+        else:
+            self.translate_button.setText("Перекласти")
