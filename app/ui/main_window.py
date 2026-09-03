@@ -1,6 +1,6 @@
 from pathlib import Path
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -50,6 +50,14 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("UA ↔ EN Voice Translator")
         self.resize(1000, 650)
+
+        self.recording_seconds = 0
+
+        self.recording_timer = QTimer(self)
+        self.recording_timer.setInterval(1000)
+        self.recording_timer.timeout.connect(
+            self.update_recording_duration
+        )
 
         self.create_interface()
 
@@ -204,11 +212,15 @@ class MainWindow(QMainWindow):
         self.translation_text_edit.clear()
 
         self.set_recording_running(True)
+        self.recording_seconds = 0
+        self.update_recording_duration()
+        self.recording_timer.start()
         self.statusBar().showMessage(
             "Записування... Натисніть кнопку ще раз для завершення"
         )
 
     def stop_recording(self) -> None:
+        self.recording_timer.stop()
         try:
             audio_path = self.audio_recorder.stop(
                 self.recording_path
@@ -236,6 +248,18 @@ class MainWindow(QMainWindow):
             self.record_button.setText("⏹ Зупинити")
         else:
             self.record_button.setText("🎤 Записати")
+
+    def update_recording_duration(self) -> None:
+        minutes, seconds = divmod(
+            self.recording_seconds,
+            60,
+        )
+
+        self.record_button.setText(
+            f"⏹ {minutes:02d}:{seconds:02d}"
+        )
+
+        self.recording_seconds += 1
 
     def start_voice_processing(
             self,
@@ -505,6 +529,10 @@ def closeEvent(self, event: QCloseEvent) -> None:
         return
 
     if self.audio_recorder.is_recording:
+        if self.audio_recorder.is_recording:
+            self.recording_timer.stop()
+            self.audio_recorder.cancel()
+
         self.audio_recorder.cancel()
 
     event.accept()
