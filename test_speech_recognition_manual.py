@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import perf_counter
 
 from app.services.speech_recognizer import SpeechRecognizer
 
@@ -8,17 +9,22 @@ def main() -> None:
 
     recognizer = SpeechRecognizer(
         model_size="small",
-        device="cpu",
-        compute_type="int8",
+        device="cuda",
+        compute_type="float16",
     )
+
+    started_at = perf_counter()
 
     recognized_text = recognizer.transcribe(
         audio_path=audio_path,
         language="uk",
     )
 
+    elapsed_time = perf_counter() - started_at
+
     print(f"Аудіофайл: {audio_path.resolve()}")
     print(f"Розпізнаний текст: {recognized_text}")
+    print(f"Час розпізнавання: {elapsed_time:.2f} с")
 
 
 if __name__ == "__main__":

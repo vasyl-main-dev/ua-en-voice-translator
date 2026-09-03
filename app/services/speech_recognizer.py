@@ -1,4 +1,26 @@
+import os
 from pathlib import Path
+
+import torch
+
+
+TORCH_LIBRARY_DIRECTORY = (
+    Path(torch.__file__).resolve().parent / "lib"
+)
+
+_dll_directory_handle = None
+
+if os.name == "nt" and TORCH_LIBRARY_DIRECTORY.exists():
+    _dll_directory_handle = os.add_dll_directory(
+        str(TORCH_LIBRARY_DIRECTORY)
+    )
+
+    os.environ["PATH"] = (
+        f"{TORCH_LIBRARY_DIRECTORY}"
+        f"{os.pathsep}"
+        f"{os.environ.get('PATH', '')}"
+    )
+
 
 from faster_whisper import WhisperModel
 
