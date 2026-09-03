@@ -1,26 +1,17 @@
 import sys
 
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
+from PySide6.QtWidgets import QApplication
 
-
-class MainWindow(QMainWindow):
-    def __init__(self) -> None:
-        super().__init__()
-
-        self.setWindowTitle("UA ↔ EN Voice Translator")
-        self.resize(900, 600)
-
-        label = QLabel("Голосовий перекладач")
-        self.setCentralWidget(label)
+from app.ui.main_window import MainWindow
 
 
 def main() -> None:
-    app = QApplication(sys.argv)
+    application = QApplication(sys.argv)
 
     window = MainWindow()
     window.show()
 
-    sys.exit(app.exec())
+    sys.exit(application.exec())
 
 
 if __name__ == "__main__":
