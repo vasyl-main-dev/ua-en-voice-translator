@@ -1,0 +1,30 @@
+# Virtual environment
+.venv/
+
+# PyCharm
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration
+.env
+settings.json
+
+# Downloaded AI models
+local_models/
+
+# Temporary audio and logs
+*.wav
+*.mp3
+logs/
+
+# Application builds
+build/
+dist/
+
+# Operating system
+Thumbs.db
+.DS_Store
