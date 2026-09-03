@@ -1,0 +1,125 @@
+QMainWindow {
+    background-color: #0f172a;
+}
+
+QWidget {
+    color: #e5e7eb;
+    font-family: "Segoe UI";
+    font-size: 14px;
+}
+
+QLabel#languageLabel {
+    color: #f8fafc;
+    font-size: 20px;
+    font-weight: 600;
+    padding: 8px;
+}
+
+QLabel#panelTitle {
+    color: #cbd5e1;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QTextEdit {
+    background-color: #111827;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 16px;
+    selection-background-color: #2563eb;
+}
+
+QTextEdit:focus {
+    border: 1px solid #3b82f6;
+}
+
+QTextEdit[readOnly="true"] {
+    background-color: #172033;
+}
+
+QPushButton {
+    min-height: 38px;
+    padding: 4px 16px;
+    color: #f8fafc;
+    background-color: #334155;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #475569;
+}
+
+QPushButton:pressed {
+    background-color: #1e293b;
+}
+
+QPushButton:disabled {
+    color: #94a3b8;
+    background-color: #1e293b;
+}
+
+QPushButton#swapButton {
+    min-width: 60px;
+    max-width: 60px;
+    padding: 4px;
+    font-size: 22px;
+    background-color: #1e293b;
+    border: 1px solid #475569;
+}
+
+QPushButton#swapButton:hover {
+    background-color: #334155;
+    border-color: #60a5fa;
+}
+
+QPushButton#translateButton {
+    background-color: #2563eb;
+}
+
+QPushButton#translateButton:hover {
+    background-color: #3b82f6;
+}
+
+QPushButton#recordButton {
+    background-color: #334155;
+}
+
+QPushButton#recordButton:hover {
+    background-color: #475569;
+}
+
+QPushButton#recordButton[recording="true"] {
+    background-color: #dc2626;
+}
+
+QPushButton#recordButton[recording="true"]:hover {
+    background-color: #ef4444;
+}
+
+QPushButton#clearButton {
+    background-color: transparent;
+    border: 1px solid #475569;
+}
+
+QPushButton#clearButton:hover {
+    background-color: #334155;
+}
+
+QStatusBar {
+    color: #94a3b8;
+    background-color: #111827;
+    border-top: 1px solid #1e293b;
+    padding-left: 8px;
+}
+
+QStatusBar::item {
+    border: none;
+}
+
+QMessageBox {
+    background-color: #0f172a;
+}

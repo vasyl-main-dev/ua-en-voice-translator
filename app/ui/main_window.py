@@ -84,14 +84,17 @@ class MainWindow(QMainWindow):
 
         self.source_language_label = QLabel("Українська")
         self.source_language_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.source_language_label.setObjectName("languageLabel")
 
         self.swap_button = QPushButton("⇄")
         self.swap_button.setToolTip("Змінити напрямок перекладу")
         self.swap_button.setFixedWidth(60)
         self.swap_button.clicked.connect(self.swap_languages)
+        self.swap_button.setObjectName("swapButton")
 
         self.target_language_label = QLabel("English")
         self.target_language_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.target_language_label.setObjectName("languageLabel")
 
         language_layout.addWidget(self.source_language_label)
         language_layout.addWidget(self.swap_button)
@@ -105,6 +108,7 @@ class MainWindow(QMainWindow):
 
         source_layout = QVBoxLayout()
         source_title = QLabel("Розпізнаний або введений текст")
+        source_title.setObjectName("panelTitle")
 
         self.source_text_edit = QTextEdit()
         self.source_text_edit.setPlaceholderText(
@@ -116,6 +120,7 @@ class MainWindow(QMainWindow):
 
         translation_layout = QVBoxLayout()
         translation_title = QLabel("Переклад")
+        translation_title.setObjectName("panelTitle")
 
         self.translation_text_edit = QTextEdit()
         self.translation_text_edit.setPlaceholderText(
@@ -136,15 +141,20 @@ class MainWindow(QMainWindow):
 
         self.record_button = QPushButton("🎤 Записати")
         self.record_button.clicked.connect(self.handle_record)
+        self.record_button.setObjectName("recordButton")
+        self.record_button.setProperty("recording", False)
 
         self.translate_button = QPushButton("Перекласти")
         self.translate_button.clicked.connect(self.handle_translate)
+        self.translate_button.setObjectName("translateButton")
 
         self.copy_button = QPushButton("Копіювати переклад")
         self.copy_button.clicked.connect(self.copy_translation)
+        self.copy_button.setObjectName("copyButton")
 
         self.clear_button = QPushButton("Очистити")
         self.clear_button.clicked.connect(self.clear_text)
+        self.clear_button.setObjectName("clearButton")
 
         button_layout.addWidget(self.record_button)
         button_layout.addStretch()
@@ -243,6 +253,19 @@ class MainWindow(QMainWindow):
         self.translate_button.setDisabled(is_recording)
         self.copy_button.setDisabled(is_recording)
         self.clear_button.setDisabled(is_recording)
+
+        self.record_button.setProperty(
+            "recording",
+            is_recording,
+        )
+
+        self.record_button.style().unpolish(
+            self.record_button
+        )
+        self.record_button.style().polish(
+            self.record_button
+        )
+        self.record_button.update()
 
         if is_recording:
             self.record_button.setText("⏹ Зупинити")
