@@ -68,6 +68,14 @@ class AudioRecorder:
 
         return output_path
 
+    def cancel(self) -> None:
+        if self.stream is not None:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+
+        self.audio_frames.clear()
+        
     def _audio_callback(
         self,
         input_data: np.ndarray,

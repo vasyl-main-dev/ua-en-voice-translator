@@ -1,4 +1,5 @@
 from pathlib import Path
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
     QApplication,
@@ -488,3 +489,22 @@ class MainWindow(QMainWindow):
             self.translate_button.setText("Перекладаємо...")
         else:
             self.translate_button.setText("Перекласти")
+
+def closeEvent(self, event: QCloseEvent) -> None:
+    if (
+        self.translation_thread is not None
+        or self.voice_thread is not None
+    ):
+        QMessageBox.information(
+            self,
+            "Обробка ще триває",
+            "Дочекайтеся завершення розпізнавання або перекладу.",
+        )
+
+        event.ignore()
+        return
+
+    if self.audio_recorder.is_recording:
+        self.audio_recorder.cancel()
+
+    event.accept()
