@@ -1,23 +1,25 @@
-from pathlib import Path
-from PySide6.QtGui import QCloseEvent
+from __future__ import annotations
+
 from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtGui import QCloseEvent, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QMessageBox,
 )
 
-from app.services.translator import Translator
-from app.services.audio_recorder import AudioRecorder
 from app.services.speech_recognizer import SpeechRecognizer
+from app.services.translator import Translator
+from app.workers.continuous_translation_worker import (
+    ContinuousTranslationWorker,
+)
 from app.workers.translation_worker import TranslationWorker
-from app.workers.voice_processing_worker import VoiceProcessingWorker
 
 
 class MainWindow(QMainWindow):
@@ -28,53 +30,41 @@ class MainWindow(QMainWindow):
         self.target_language = "en"
 
         self.translator = Translator()
-
-        self.audio_recorder = AudioRecorder()
-
-        self.speech_recognizer = SpeechRecognizer(
-            model_size="small",
-            device="cuda",
-            compute_type="float16",
-        )
-
-        project_root = Path(__file__).resolve().parents[2]
-        self.recording_path = (
-                project_root / "recordings" / "latest_recording.wav"
-        )
+        self.speech_recognizer = SpeechRecognizer(model_size="small")
 
         self.translation_thread: QThread | None = None
         self.translation_worker: TranslationWorker | None = None
 
-        self.voice_thread: QThread | None = None
-        self.voice_worker: VoiceProcessingWorker | None = None
+        self.continuous_thread: QThread | None = None
+        self.continuous_worker: ContinuousTranslationWorker | None = None
+        self.continuous_seconds = 0
+        self.closing_after_stop = False
 
-        self.setWindowTitle("UA ↔ EN Voice Translator")
-        self.resize(1000, 650)
-
-        self.recording_seconds = 0
-
-        self.recording_timer = QTimer(self)
-        self.recording_timer.setInterval(1000)
-        self.recording_timer.timeout.connect(
-            self.update_recording_duration
+        self.continuous_timer = QTimer(self)
+        self.continuous_timer.setInterval(1_000)
+        self.continuous_timer.timeout.connect(
+            self.update_continuous_duration
         )
 
+        self.setWindowTitle("UA ↔ EN Voice Translator")
+        self.resize(1_000, 650)
         self.create_interface()
 
     def create_interface(self) -> None:
         central_widget = QWidget()
         main_layout = QVBoxLayout(central_widget)
-
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(15)
 
-        language_layout = self.create_language_layout()
-        text_layout = self.create_text_layout()
-        button_layout = self.create_button_layout()
+        main_layout.addLayout(self.create_language_layout())
+        main_layout.addLayout(self.create_text_layout())
+        main_layout.addLayout(self.create_button_layout())
 
-        main_layout.addLayout(language_layout)
-        main_layout.addLayout(text_layout)
-        main_layout.addLayout(button_layout)
+        self.runtime_label = QLabel(
+            f"Обчислення: {self.speech_recognizer.runtime_description}"
+        )
+        self.runtime_label.setObjectName("runtimeLabel")
+        main_layout.addWidget(self.runtime_label)
 
         self.setCentralWidget(central_widget)
         self.statusBar().showMessage("Програма готова до роботи")
@@ -99,7 +89,6 @@ class MainWindow(QMainWindow):
         language_layout.addWidget(self.source_language_label)
         language_layout.addWidget(self.swap_button)
         language_layout.addWidget(self.target_language_label)
-
         return language_layout
 
     def create_text_layout(self) -> QHBoxLayout:
@@ -109,42 +98,37 @@ class MainWindow(QMainWindow):
         source_layout = QVBoxLayout()
         source_title = QLabel("Розпізнаний або введений текст")
         source_title.setObjectName("panelTitle")
-
         self.source_text_edit = QTextEdit()
         self.source_text_edit.setPlaceholderText(
-            "Введіть український текст або скористайтеся мікрофоном..."
+            "Введіть український текст або почніть голосовий переклад..."
         )
-
         source_layout.addWidget(source_title)
         source_layout.addWidget(self.source_text_edit)
 
         translation_layout = QVBoxLayout()
         translation_title = QLabel("Переклад")
         translation_title.setObjectName("panelTitle")
-
         self.translation_text_edit = QTextEdit()
         self.translation_text_edit.setPlaceholderText(
             "Тут з’явиться переклад англійською..."
         )
         self.translation_text_edit.setReadOnly(True)
-
         translation_layout.addWidget(translation_title)
         translation_layout.addWidget(self.translation_text_edit)
 
         text_layout.addLayout(source_layout)
         text_layout.addLayout(translation_layout)
-
         return text_layout
 
     def create_button_layout(self) -> QHBoxLayout:
         button_layout = QHBoxLayout()
 
-        self.record_button = QPushButton("🎤 Записати")
-        self.record_button.clicked.connect(self.handle_record)
+        self.record_button = QPushButton("🎤 Почати переклад")
+        self.record_button.clicked.connect(self.handle_continuous_translation)
         self.record_button.setObjectName("recordButton")
         self.record_button.setProperty("recording", False)
 
-        self.translate_button = QPushButton("Перекласти")
+        self.translate_button = QPushButton("Перекласти текст")
         self.translate_button.clicked.connect(self.handle_translate)
         self.translate_button.setObjectName("translateButton")
 
@@ -161,7 +145,6 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.translate_button)
         button_layout.addWidget(self.copy_button)
         button_layout.addWidget(self.clear_button)
-
         return button_layout
 
     def swap_languages(self) -> None:
@@ -173,9 +156,8 @@ class MainWindow(QMainWindow):
         if self.source_language == "uk":
             self.source_language_label.setText("Українська")
             self.target_language_label.setText("English")
-
             self.source_text_edit.setPlaceholderText(
-                "Введіть український текст або скористайтеся мікрофоном..."
+                "Введіть український текст або почніть голосовий переклад..."
             )
             self.translation_text_edit.setPlaceholderText(
                 "Тут з’явиться переклад англійською..."
@@ -183,9 +165,8 @@ class MainWindow(QMainWindow):
         else:
             self.source_language_label.setText("English")
             self.target_language_label.setText("Українська")
-
             self.source_text_edit.setPlaceholderText(
-                "Enter English text or use the microphone..."
+                "Enter English text or start voice translation..."
             )
             self.translation_text_edit.setPlaceholderText(
                 "Тут з’явиться переклад українською..."
@@ -195,243 +176,153 @@ class MainWindow(QMainWindow):
             f"Напрямок: {self.source_language} → {self.target_language}"
         )
 
-    def handle_record(self) -> None:
-        if self.audio_recorder.is_recording:
-            self.stop_recording()
+    def handle_continuous_translation(self) -> None:
+        if self.continuous_thread is None:
+            self.start_continuous_translation()
         else:
-            self.start_recording()
+            self.stop_continuous_translation()
 
-    def start_recording(self) -> None:
-        if self.voice_thread is not None:
+    def start_continuous_translation(self) -> None:
+        if self.translation_thread is not None:
             self.statusBar().showMessage(
-                "Попередній запис ще обробляється"
-            )
-            return
-
-        try:
-            self.audio_recorder.start()
-        except Exception as error:
-            QMessageBox.critical(
-                self,
-                "Помилка запису",
-                str(error),
+                "Дочекайтеся завершення текстового перекладу"
             )
             return
 
         self.source_text_edit.clear()
         self.translation_text_edit.clear()
+        self.continuous_seconds = 0
+        self.set_continuous_running(True)
+        self.record_button.setText("Запуск мікрофона...")
+        self.record_button.setDisabled(True)
+        self.statusBar().showMessage("Запускаємо мікрофон...")
 
-        self.set_recording_running(True)
-        self.recording_seconds = 0
-        self.update_recording_duration()
-        self.recording_timer.start()
-        self.statusBar().showMessage(
-            "Записування... Натисніть кнопку ще раз для завершення"
-        )
-
-    def stop_recording(self) -> None:
-        self.recording_timer.stop()
-        try:
-            audio_path = self.audio_recorder.stop(
-                self.recording_path
-            )
-        except Exception as error:
-            self.set_recording_running(False)
-
-            QMessageBox.critical(
-                self,
-                "Помилка запису",
-                str(error),
-            )
-            return
-
-        self.set_recording_running(False)
-        self.start_voice_processing(audio_path)
-
-    def set_recording_running(self, is_recording: bool) -> None:
-        self.swap_button.setDisabled(is_recording)
-        self.translate_button.setDisabled(is_recording)
-        self.copy_button.setDisabled(is_recording)
-        self.clear_button.setDisabled(is_recording)
-
-        self.record_button.setProperty(
-            "recording",
-            is_recording,
-        )
-
-        self.record_button.style().unpolish(
-            self.record_button
-        )
-        self.record_button.style().polish(
-            self.record_button
-        )
-        self.record_button.update()
-
-        if is_recording:
-            self.record_button.setText("⏹ Зупинити")
-        else:
-            self.record_button.setText("🎤 Записати")
-
-    def update_recording_duration(self) -> None:
-        minutes, seconds = divmod(
-            self.recording_seconds,
-            60,
-        )
-
-        self.record_button.setText(
-            f"⏹ {minutes:02d}:{seconds:02d}"
-        )
-
-        self.recording_seconds += 1
-
-    def start_voice_processing(
-            self,
-            audio_path: Path,
-    ) -> None:
-        if self.voice_thread is not None:
-            return
-
-        self.set_voice_processing_running(True)
-        self.statusBar().showMessage(
-            "Підготовка до розпізнавання..."
-        )
-
-        self.voice_thread = QThread(self)
-
-        self.voice_worker = VoiceProcessingWorker(
-            audio_path=audio_path,
+        self.continuous_thread = QThread(self)
+        self.continuous_worker = ContinuousTranslationWorker(
             speech_recognizer=self.speech_recognizer,
             translator=self.translator,
             source_language=self.source_language,
             target_language=self.target_language,
         )
+        self.continuous_worker.moveToThread(self.continuous_thread)
 
-        self.voice_worker.moveToThread(self.voice_thread)
-
-        self.voice_thread.started.connect(
-            self.voice_worker.run
+        self.continuous_thread.started.connect(
+            self.continuous_worker.run
         )
-
-        self.voice_worker.stage_changed.connect(
+        self.continuous_worker.recording_started.connect(
+            self.handle_continuous_started
+        )
+        self.continuous_worker.stage_changed.connect(
             self.statusBar().showMessage
         )
-        self.voice_worker.recognized.connect(
-            self.source_text_edit.setPlainText
+        self.continuous_worker.recognized.connect(
+            self.append_recognized_text
         )
-        self.voice_worker.translated.connect(
-            self.handle_voice_translation_finished
+        self.continuous_worker.translated.connect(
+            self.append_translated_text
         )
-        self.voice_worker.failed.connect(
-            self.handle_voice_processing_failed
+        self.continuous_worker.failed.connect(
+            self.handle_continuous_failed
         )
-
-        self.voice_worker.finished.connect(
-            self.voice_thread.quit
+        self.continuous_worker.finished.connect(
+            self.continuous_thread.quit
         )
-        self.voice_worker.finished.connect(
-            self.voice_worker.deleteLater
+        self.continuous_worker.finished.connect(
+            self.continuous_worker.deleteLater
         )
-
-        self.voice_thread.finished.connect(
-            self.cleanup_voice_thread
+        self.continuous_thread.finished.connect(
+            self.cleanup_continuous_thread
         )
-        self.voice_thread.finished.connect(
-            self.voice_thread.deleteLater
+        self.continuous_thread.finished.connect(
+            self.continuous_thread.deleteLater
         )
+        self.continuous_thread.start()
 
-        self.voice_thread.start()
+    def handle_continuous_started(self) -> None:
+        self.record_button.setDisabled(False)
+        self.update_continuous_duration()
+        self.continuous_timer.start()
 
-        def handle_voice_translation_finished(
-                self,
-                translated_text: str,
-        ) -> None:
-            self.translation_text_edit.setPlainText(
-                translated_text
-            )
-            self.statusBar().showMessage(
-                "Голосовий переклад завершено"
-            )
+    def stop_continuous_translation(self) -> None:
+        if self.continuous_worker is None:
+            return
 
-        def handle_voice_processing_failed(
-                self,
-                error_message: str,
-        ) -> None:
-            self.statusBar().showMessage(
-                "Помилка голосової обробки"
-            )
-
-            QMessageBox.critical(
-                self,
-                "Помилка голосового перекладу",
-                error_message,
-            )
-
-        def cleanup_voice_thread(self) -> None:
-            self.voice_worker = None
-            self.voice_thread = None
-
-            self.set_voice_processing_running(False)
-
-        def set_voice_processing_running(
-                self,
-                is_running: bool,
-        ) -> None:
-            self.record_button.setDisabled(is_running)
-            self.translate_button.setDisabled(is_running)
-            self.swap_button.setDisabled(is_running)
-            self.copy_button.setDisabled(is_running)
-            self.clear_button.setDisabled(is_running)
-
-            if is_running:
-                self.record_button.setText("Обробка...")
-            else:
-                self.record_button.setText("🎤 Записати")
-
-    def handle_voice_translation_finished(
-            self,
-            translated_text: str,
-    ) -> None:
-        self.translation_text_edit.setPlainText(
-            translated_text
-        )
+        self.continuous_timer.stop()
+        self.record_button.setDisabled(True)
+        self.record_button.setText("Завершення...")
         self.statusBar().showMessage(
-            "Голосовий переклад завершено"
+            "Зупиняємо запис і завершуємо обробку аудіо..."
         )
+        self.continuous_worker.request_stop()
 
-    def handle_voice_processing_failed(
-            self,
-            error_message: str,
-    ) -> None:
-        self.statusBar().showMessage(
-            "Помилка голосової обробки"
-        )
+    def append_recognized_text(self, text: str) -> None:
+        self._append_paragraph(self.source_text_edit, text)
+        self.refresh_runtime_label()
 
+    def append_translated_text(self, text: str) -> None:
+        self._append_paragraph(self.translation_text_edit, text)
+
+    @staticmethod
+    def _append_paragraph(text_edit: QTextEdit, text: str) -> None:
+        cursor = text_edit.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+
+        if text_edit.toPlainText():
+            cursor.insertBlock()
+
+        cursor.insertText(text)
+        text_edit.setTextCursor(cursor)
+        text_edit.ensureCursorVisible()
+
+    def handle_continuous_failed(self, error_message: str) -> None:
+        self.statusBar().showMessage("Помилка безперервного перекладу")
         QMessageBox.critical(
             self,
             "Помилка голосового перекладу",
             error_message,
         )
 
-    def cleanup_voice_thread(self) -> None:
-        self.voice_worker = None
-        self.voice_thread = None
+    def cleanup_continuous_thread(self) -> None:
+        self.continuous_worker = None
+        self.continuous_thread = None
+        self.continuous_timer.stop()
+        self.set_continuous_running(False)
+        self.refresh_runtime_label()
 
-        self.set_voice_processing_running(False)
+        if self.closing_after_stop:
+            self.closing_after_stop = False
+            self.close()
+        else:
+            self.statusBar().showMessage("Голосовий переклад завершено")
 
-    def set_voice_processing_running(
-            self,
-            is_running: bool,
-    ) -> None:
-        self.record_button.setDisabled(is_running)
-        self.translate_button.setDisabled(is_running)
+    def set_continuous_running(self, is_running: bool) -> None:
         self.swap_button.setDisabled(is_running)
-        self.copy_button.setDisabled(is_running)
+        self.translate_button.setDisabled(is_running)
         self.clear_button.setDisabled(is_running)
+        self.source_text_edit.setReadOnly(is_running)
+
+        self.record_button.setProperty("recording", is_running)
+        self.record_button.style().unpolish(self.record_button)
+        self.record_button.style().polish(self.record_button)
+        self.record_button.update()
 
         if is_running:
-            self.record_button.setText("Обробка...")
+            self.record_button.setText("⏹ Зупинити 00:00")
         else:
-            self.record_button.setText("🎤 Записати")
+            self.record_button.setDisabled(False)
+            self.record_button.setText("🎤 Почати переклад")
+
+    def update_continuous_duration(self) -> None:
+        minutes, seconds = divmod(self.continuous_seconds, 60)
+        self.record_button.setText(
+            f"⏹ Зупинити {minutes:02d}:{seconds:02d}"
+        )
+        self.continuous_seconds += 1
+
+    def refresh_runtime_label(self) -> None:
+        self.runtime_label.setText(
+            f"Обчислення: {self.speech_recognizer.runtime_description}"
+        )
 
     def handle_translate(self) -> None:
         source_text = self.source_text_edit.toPlainText().strip()
@@ -446,75 +337,44 @@ class MainWindow(QMainWindow):
 
         self.set_translation_running(True)
         self.statusBar().showMessage("Виконується переклад...")
-
         self.translation_thread = QThread(self)
-
         self.translation_worker = TranslationWorker(
             translator=self.translator,
             text=source_text,
             source_language=self.source_language,
             target_language=self.target_language,
         )
-
         self.translation_worker.moveToThread(self.translation_thread)
 
-        self.translation_thread.started.connect(
-            self.translation_worker.run
-        )
-
+        self.translation_thread.started.connect(self.translation_worker.run)
         self.translation_worker.translation_finished.connect(
             self.handle_translation_finished
         )
         self.translation_worker.translation_failed.connect(
             self.handle_translation_failed
         )
-
         self.translation_worker.finished.connect(
             self.translation_thread.quit
         )
         self.translation_worker.finished.connect(
             self.translation_worker.deleteLater
         )
-
         self.translation_thread.finished.connect(
             self.cleanup_translation_thread
         )
         self.translation_thread.finished.connect(
             self.translation_thread.deleteLater
         )
-
         self.translation_thread.start()
 
-    def copy_translation(self) -> None:
-        translation = self.translation_text_edit.toPlainText()
-
-        if not translation:
-            self.statusBar().showMessage("Немає перекладу для копіювання")
-            return
-
-        QApplication.clipboard().setText(translation)
-        self.statusBar().showMessage("Переклад скопійовано")
-
-    def clear_text(self) -> None:
-        self.source_text_edit.clear()
-        self.translation_text_edit.clear()
-        self.statusBar().showMessage("Текст очищено")
-
-    def handle_translation_finished(
-            self,
-            translated_text: str,
-    ) -> None:
+    def handle_translation_finished(self, translated_text: str) -> None:
         self.translation_text_edit.setPlainText(translated_text)
         self.statusBar().showMessage("Переклад завершено")
         self.set_translation_running(False)
 
-    def handle_translation_failed(
-            self,
-            error_message: str,
-    ) -> None:
+    def handle_translation_failed(self, error_message: str) -> None:
         self.statusBar().showMessage("Помилка перекладу")
         self.set_translation_running(False)
-
         QMessageBox.critical(
             self,
             "Помилка перекладу",
@@ -531,31 +391,38 @@ class MainWindow(QMainWindow):
         self.record_button.setDisabled(is_running)
         self.copy_button.setDisabled(is_running)
         self.clear_button.setDisabled(is_running)
-
-        if is_running:
-            self.translate_button.setText("Перекладаємо...")
-        else:
-            self.translate_button.setText("Перекласти")
-
-def closeEvent(self, event: QCloseEvent) -> None:
-    if (
-        self.translation_thread is not None
-        or self.voice_thread is not None
-    ):
-        QMessageBox.information(
-            self,
-            "Обробка ще триває",
-            "Дочекайтеся завершення розпізнавання або перекладу.",
+        self.translate_button.setText(
+            "Перекладаємо..." if is_running else "Перекласти текст"
         )
 
-        event.ignore()
-        return
+    def copy_translation(self) -> None:
+        translation = self.translation_text_edit.toPlainText()
+        if not translation:
+            self.statusBar().showMessage("Немає перекладу для копіювання")
+            return
 
-    if self.audio_recorder.is_recording:
-        if self.audio_recorder.is_recording:
-            self.recording_timer.stop()
-            self.audio_recorder.cancel()
+        QApplication.clipboard().setText(translation)
+        self.statusBar().showMessage("Переклад скопійовано")
 
-        self.audio_recorder.cancel()
+    def clear_text(self) -> None:
+        self.source_text_edit.clear()
+        self.translation_text_edit.clear()
+        self.statusBar().showMessage("Текст очищено")
 
-    event.accept()
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.continuous_thread is not None:
+            self.closing_after_stop = True
+            self.stop_continuous_translation()
+            event.ignore()
+            return
+
+        if self.translation_thread is not None:
+            QMessageBox.information(
+                self,
+                "Обробка ще триває",
+                "Дочекайтеся завершення перекладу.",
+            )
+            event.ignore()
+            return
+
+        event.accept()

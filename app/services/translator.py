@@ -49,7 +49,7 @@ class Translator:
         with torch.inference_mode():
             generated_tokens = model.generate(
                 **encoded_text,
-                max_length=256,
+                max_new_tokens=256,
                 num_beams=4,
             )
 

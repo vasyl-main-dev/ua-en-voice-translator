@@ -7,11 +7,9 @@ from app.services.speech_recognizer import SpeechRecognizer
 def main() -> None:
     audio_path = Path("recordings") / "microphone_test.wav"
 
-    recognizer = SpeechRecognizer(
-        model_size="small",
-        device="cuda",
-        compute_type="float16",
-    )
+    recognizer = SpeechRecognizer(model_size="small")
+
+    print(f"Режим обчислень: {recognizer.runtime_description}")
 
     started_at = perf_counter()
 
