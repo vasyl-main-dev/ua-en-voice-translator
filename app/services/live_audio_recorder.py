@@ -74,6 +74,19 @@ class LiveAudioRecorder:
         audio = np.concatenate(chunks, axis=0)
         return np.asarray(audio, dtype=np.float32).reshape(-1)
 
+    def read_frame(
+        self,
+        stop_event: Event,
+        timeout: float = 0.1,
+    ) -> np.ndarray | None:
+        if stop_event.is_set() and self._frames.empty():
+            return None
+
+        try:
+            return self._frames.get(timeout=timeout)
+        except Empty:
+            return None
+
     def has_pending_audio(self) -> bool:
         return not self._frames.empty()
 

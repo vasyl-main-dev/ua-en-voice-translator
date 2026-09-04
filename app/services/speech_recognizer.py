@@ -26,17 +26,18 @@ SPEECH_MODELS_DIRECTORY = PROJECT_ROOT / "local_models" / "speech"
 class SpeechRecognizer:
     def __init__(
         self,
-        model_size: str = "small",
+        model_size: str | None = None,
         profile: ComputeProfile | None = None,
     ) -> None:
-        self.model_size = model_size
         self.profile = profile or detect_compute_profile()
+        self._automatic_model_size = model_size is None
+        self.model_size = model_size or self._recommended_model_size()
         self.model: WhisperModel | None = None
         self.fallback_reason: str | None = None
 
     @property
     def runtime_description(self) -> str:
-        return self.profile.description
+        return f"{self.profile.description}, Whisper {self.model_size}"
 
     def transcribe(
         self,
@@ -54,13 +55,23 @@ class SpeechRecognizer:
         self,
         audio_samples: "np.ndarray",
         language: str,
+        initial_prompt: str | None = None,
     ) -> str:
         if audio_samples.size == 0:
             return ""
 
-        return self._transcribe_audio(audio_samples, language)
+        return self._transcribe_audio(
+            audio_samples,
+            language,
+            initial_prompt=initial_prompt,
+        )
 
-    def _transcribe_audio(self, audio, language: str) -> str:
+    def _transcribe_audio(
+        self,
+        audio,
+        language: str,
+        initial_prompt: str | None = None,
+    ) -> str:
         model = self._get_model()
 
         segments, _ = model.transcribe(
@@ -70,6 +81,7 @@ class SpeechRecognizer:
             beam_size=5,
             vad_filter=True,
             condition_on_previous_text=False,
+            initial_prompt=initial_prompt,
         )
 
         recognized_parts = [
@@ -101,7 +113,14 @@ class SpeechRecognizer:
                 "Автоматично перемикаємося на CPU."
             )
             self.profile = cpu_compute_profile()
+            if self._automatic_model_size:
+                self.model_size = self._recommended_model_size()
             return self._create_model(self.profile)
+
+    def _recommended_model_size(self) -> str:
+        if self.profile.device == "cuda":
+            return "medium"
+        return "small"
 
     def _create_model(self, profile: ComputeProfile) -> WhisperModel:
         print(f"Завантаження Whisper-моделі: {self.model_size}")
