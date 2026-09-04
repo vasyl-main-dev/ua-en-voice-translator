@@ -24,6 +24,9 @@ class DetectComputeProfileTests(unittest.TestCase):
         )
 
         with (
+            patch(
+                "app.core.runtime.prepare_windows_dll_search_path"
+            ),
             patch.dict(
                 sys.modules,
                 {"ctranslate2": fake_ctranslate2},
@@ -44,6 +47,9 @@ class DetectComputeProfileTests(unittest.TestCase):
         )
 
         with (
+            patch(
+                "app.core.runtime.prepare_windows_dll_search_path"
+            ),
             patch.dict(
                 sys.modules,
                 {"ctranslate2": fake_ctranslate2},
