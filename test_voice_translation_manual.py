@@ -11,12 +11,13 @@ def main() -> None:
     source_language = "uk"
     target_language = "en"
 
-    speech_recognizer = SpeechRecognizer(
-        model_size="small",
-        device="cuda",
-        compute_type="float16",
-    )
+    speech_recognizer = SpeechRecognizer(model_size="small")
     translator = Translator()
+
+    print(
+        f"Режим обчислень: "
+        f"{speech_recognizer.runtime_description}"
+    )
 
     processing_started_at = perf_counter()
 
