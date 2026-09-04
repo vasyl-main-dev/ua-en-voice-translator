@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.runtime import detect_compute_profile
 from app.services.speech_recognizer import SpeechRecognizer
 from app.services.translator import Translator
 from app.workers.continuous_translation_worker import (
@@ -29,8 +30,11 @@ class MainWindow(QMainWindow):
         self.source_language = "uk"
         self.target_language = "en"
 
-        self.translator = Translator()
-        self.speech_recognizer = SpeechRecognizer(model_size="small")
+        compute_profile = detect_compute_profile()
+        self.speech_recognizer = SpeechRecognizer(
+            profile=compute_profile,
+        )
+        self.translator = Translator(profile=compute_profile)
 
         self.translation_thread: QThread | None = None
         self.translation_worker: TranslationWorker | None = None
@@ -61,7 +65,7 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(self.create_button_layout())
 
         self.runtime_label = QLabel(
-            f"Обчислення: {self.speech_recognizer.runtime_description}"
+            self.runtime_description
         )
         self.runtime_label.setObjectName("runtimeLabel")
         main_layout.addWidget(self.runtime_label)
@@ -261,6 +265,7 @@ class MainWindow(QMainWindow):
 
     def append_translated_text(self, text: str) -> None:
         self._append_paragraph(self.translation_text_edit, text)
+        self.refresh_runtime_label()
 
     @staticmethod
     def _append_paragraph(text_edit: QTextEdit, text: str) -> None:
@@ -320,8 +325,14 @@ class MainWindow(QMainWindow):
         self.continuous_seconds += 1
 
     def refresh_runtime_label(self) -> None:
-        self.runtime_label.setText(
-            f"Обчислення: {self.speech_recognizer.runtime_description}"
+        self.runtime_label.setText(self.runtime_description)
+
+    @property
+    def runtime_description(self) -> str:
+        return (
+            f"Розпізнавання: "
+            f"{self.speech_recognizer.runtime_description}; "
+            f"переклад: {self.translator.runtime_description}"
         )
 
     def handle_translate(self) -> None:
@@ -369,6 +380,7 @@ class MainWindow(QMainWindow):
 
     def handle_translation_finished(self, translated_text: str) -> None:
         self.translation_text_edit.setPlainText(translated_text)
+        self.refresh_runtime_label()
         self.statusBar().showMessage("Переклад завершено")
         self.set_translation_running(False)
 
