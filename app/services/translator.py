@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import gc
-from pathlib import Path
 
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 from app.core.runtime import ComputeProfile, detect_compute_profile
+from app.services.model_store import (
+    TRANSLATION_MODEL_NAME,
+    ensure_translation_model,
+)
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODELS_DIRECTORY = PROJECT_ROOT / "local_models" / "translation"
-MODEL_NAME = "facebook/nllb-200-distilled-600M"
 LANGUAGE_CODES = {
     "uk": "ukr_Cyrl",
     "en": "eng_Latn",
@@ -83,11 +83,11 @@ class Translator:
         return self.tokenizer, self.model
 
     def _load_model_with_fallback(self) -> None:
-        MODELS_DIRECTORY.mkdir(parents=True, exist_ok=True)
+        model_directory = ensure_translation_model()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            MODEL_NAME,
-            cache_dir=MODELS_DIRECTORY,
+            model_directory,
             src_lang=LANGUAGE_CODES["uk"],
+            local_files_only=True,
         )
 
         try:
@@ -109,12 +109,16 @@ class Translator:
 
     def _create_model(self, device: str):
         dtype = torch.float16 if device == "cuda" else torch.float32
-        print(f"Завантаження моделі перекладу: {MODEL_NAME}")
+        model_directory = ensure_translation_model()
+        print(
+            "Завантаження моделі перекладу: "
+            f"{TRANSLATION_MODEL_NAME}"
+        )
 
         model = AutoModelForSeq2SeqLM.from_pretrained(
-            MODEL_NAME,
-            cache_dir=MODELS_DIRECTORY,
+            model_directory,
             dtype=dtype,
+            local_files_only=True,
         )
         model.to(device)
         model.eval()

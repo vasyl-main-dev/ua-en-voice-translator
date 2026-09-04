@@ -1,21 +1,15 @@
 import sys
 
+from PySide6.QtWidgets import QApplication, QMessageBox
 
-from PySide6.QtWidgets import QApplication
-from pathlib import Path
-
+from app.core.paths import resource_root
 from app.ui.main_window import MainWindow
 
 
 
 def main() -> None:
     application = QApplication(sys.argv)
-    stylesheet_path = (
-            Path(__file__).resolve().parent
-            / "app"
-            / "ui"
-            / "styles.qss"
-    )
+    stylesheet_path = resource_root() / "app" / "ui" / "styles.qss"
 
     if stylesheet_path.exists():
         stylesheet = stylesheet_path.read_text(
@@ -23,7 +17,16 @@ def main() -> None:
         )
         application.setStyleSheet(stylesheet)
 
-    window = MainWindow()
+    try:
+        window = MainWindow()
+    except Exception as error:
+        QMessageBox.critical(
+            None,
+            "Помилка запуску",
+            "Не вдалося запустити програму:\n\n"
+            f"{error}",
+        )
+        raise
     window.show()
 
     sys.exit(application.exec())

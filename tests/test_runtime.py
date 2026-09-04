@@ -8,6 +8,16 @@ from app.core.runtime import detect_compute_profile
 
 
 class DetectComputeProfileTests(unittest.TestCase):
+    @patch(
+        "app.core.runtime.package_manifest",
+        return_value={"runtime_profile": "cpu"},
+    )
+    def test_universal_package_forces_cpu(self, _manifest) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            profile = detect_compute_profile()
+
+        self.assertEqual(profile.device, "cpu")
+
     def test_cpu_can_be_forced(self) -> None:
         with patch.dict(
             os.environ,

@@ -1,0 +1,56 @@
+name: Build Windows installers
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "app/**"
+      - "main.py"
+      - "requirements*.txt"
+      - "packaging/**"
+      - "scripts/**"
+      - ".github/workflows/build-windows-installers.yml"
+
+jobs:
+  build:
+    name: ${{ matrix.mode }} installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [online, offline]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements-common.txt
+            requirements-cpu.txt
+            requirements-build.txt
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: powershell
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: ./scripts/build_windows.ps1 -Mode "${{ matrix.mode }}"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ua-en-voice-translator-${{ matrix.mode }}-installer
+          path: installer_output/*.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+

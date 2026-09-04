@@ -9,6 +9,7 @@ from app.core.runtime import (
     detect_compute_profile,
     prepare_windows_dll_search_path,
 )
+from app.services.model_store import ensure_speech_model
 
 if TYPE_CHECKING:
     import numpy as np
@@ -17,10 +18,6 @@ if TYPE_CHECKING:
 prepare_windows_dll_search_path()
 
 from faster_whisper import WhisperModel
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SPEECH_MODELS_DIRECTORY = PROJECT_ROOT / "local_models" / "speech"
 
 
 class SpeechRecognizer:
@@ -99,8 +96,6 @@ class SpeechRecognizer:
         return self.model
 
     def _load_model_with_fallback(self) -> WhisperModel:
-        SPEECH_MODELS_DIRECTORY.mkdir(parents=True, exist_ok=True)
-
         try:
             return self._create_model(self.profile)
         except (OSError, RuntimeError) as error:
@@ -124,12 +119,13 @@ class SpeechRecognizer:
 
     def _create_model(self, profile: ComputeProfile) -> WhisperModel:
         print(f"Завантаження Whisper-моделі: {self.model_size}")
+        model_directory = ensure_speech_model(self.model_size)
 
         model = WhisperModel(
-            model_size_or_path=self.model_size,
+            model_size_or_path=str(model_directory),
             device=profile.device,
             compute_type=profile.compute_type,
-            download_root=str(SPEECH_MODELS_DIRECTORY),
+            local_files_only=True,
         )
 
         print(

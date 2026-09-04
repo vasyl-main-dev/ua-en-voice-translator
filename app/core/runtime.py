@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.core.paths import package_manifest
+
 
 @dataclass(frozen=True, slots=True)
 class ComputeProfile:
@@ -76,6 +78,15 @@ def detect_compute_profile() -> ComputeProfile:
         )
 
     if requested_device == "cpu":
+        return cpu_compute_profile()
+
+    packaged_profile = package_manifest().get("runtime_profile")
+    if packaged_profile == "cpu":
+        if requested_device == "cuda":
+            raise RuntimeError(
+                "Цей універсальний інсталятор містить CPU-версію. "
+                "Для CUDA потрібна окрема NVIDIA-збірка."
+            )
         return cpu_compute_profile()
 
     prepare_windows_dll_search_path()

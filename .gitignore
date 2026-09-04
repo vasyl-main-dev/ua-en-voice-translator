@@ -24,6 +24,7 @@ logs/
 # Application builds
 build/
 dist/
+installer_output/
 
 # Operating system
 Thumbs.db
