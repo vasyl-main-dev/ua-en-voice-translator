@@ -6,17 +6,19 @@
   #define ApplicationName "UA-EN Voice Translator Offline"
   #define ExecutableName "UA-EN-Voice-Translator-Offline.exe"
   #define SourceDirectory "UA-EN-Voice-Translator-Offline"
+  #define ApplicationId "{{D95E2505-2220-47C6-BFA1-B67159105653}"
 #else
   #define ApplicationName "UA-EN Voice Translator Online"
   #define ExecutableName "UA-EN-Voice-Translator-Online.exe"
   #define SourceDirectory "UA-EN-Voice-Translator-Online"
+  #define ApplicationId "{{E84BF8C9-D9E2-46F8-9256-E6741A5CE978}"
 #endif
 
 #define ApplicationVersion "0.3.0"
 #define PublisherName "UA-EN Voice Translator"
 
 [Setup]
-AppId={{D95E2505-2220-47C6-BFA1-B67159105653}
+AppId={#ApplicationId}
 AppName={#ApplicationName}
 AppVersion={#ApplicationVersion}
 AppPublisher={#PublisherName}
@@ -49,4 +51,3 @@ Name: "desktopicon"; Description: "Створити ярлик на робочо
 
 [Run]
 Filename: "{app}\{#ExecutableName}"; Description: "Запустити {#ApplicationName}"; Flags: nowait postinstall skipifsilent
-
