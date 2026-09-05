@@ -11,6 +11,19 @@ from app.services import model_store
 class ModelStoreTests(unittest.TestCase):
     @patch(
         "app.services.model_store.package_manifest",
+        return_value={},
+    )
+    def test_large_v3_is_default_on_experimental_branch(
+        self,
+        _manifest,
+    ) -> None:
+        self.assertEqual(
+            model_store.configured_speech_model(),
+            "large-v3",
+        )
+
+    @patch(
+        "app.services.model_store.package_manifest",
         return_value={"speech_model": "large-v3"},
     )
     def test_package_can_select_large_v3(self, _manifest) -> None:

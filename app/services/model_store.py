@@ -12,7 +12,7 @@ from app.core.paths import (
 
 TRANSLATION_MODEL_NAME = "facebook/nllb-200-distilled-600M"
 TRANSLATION_MODEL_DIRECTORY_NAME = "nllb-200-distilled-600M"
-DEFAULT_SPEECH_MODEL = "medium"
+DEFAULT_SPEECH_MODEL = "large-v3"
 WHISPER_REPOSITORIES = {
     "small": "Systran/faster-whisper-small",
     "medium": "Systran/faster-whisper-medium",
