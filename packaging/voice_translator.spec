@@ -12,8 +12,22 @@ package_mode = os.environ.get(
     "VOICE_TRANSLATOR_PACKAGE_MODE",
     "online",
 ).lower()
-if package_mode not in {"online", "offline"}:
-    raise ValueError("VOICE_TRANSLATOR_PACKAGE_MODE must be online or offline")
+supported_package_modes = {
+    "online",
+    "offline",
+    "nvidia-large-online",
+    "nvidia-large-offline",
+}
+if package_mode not in supported_package_modes:
+    raise ValueError(
+        "Unsupported VOICE_TRANSLATOR_PACKAGE_MODE: "
+        f"{package_mode}"
+    )
+
+is_nvidia_package = package_mode.startswith("nvidia-large-")
+is_offline_package = package_mode.endswith("offline")
+speech_model = "large-v3" if is_nvidia_package else "medium"
+runtime_profile = "cuda" if is_nvidia_package else "cpu"
 
 datas = [
     (
@@ -30,8 +44,8 @@ manifest_path.write_text(
     json.dumps(
         {
             "package_mode": package_mode,
-            "runtime_profile": "cpu",
-            "speech_model": "medium",
+            "runtime_profile": runtime_profile,
+            "speech_model": speech_model,
             "translation_model": "facebook/nllb-200-distilled-600M",
         },
         ensure_ascii=False,
@@ -60,7 +74,7 @@ for dependency in (
 
 datas += collect_data_files("certifi")
 
-if package_mode == "offline":
+if is_offline_package:
     models_directory = project_root / "build" / "offline_models"
     if not models_directory.is_dir():
         raise FileNotFoundError(
@@ -68,11 +82,19 @@ if package_mode == "offline":
         )
     datas.append((str(models_directory), "local_models"))
 
-application_name = (
-    "UA-EN-Voice-Translator-Offline"
-    if package_mode == "offline"
-    else "UA-EN-Voice-Translator-Online"
-)
+application_names = {
+    "online": "UA-EN-Voice-Translator-Online",
+    "offline": "UA-EN-Voice-Translator-Offline",
+    "nvidia-large-online": "UA-EN-Voice-Translator-NVIDIA-Large-Online",
+    "nvidia-large-offline": "UA-EN-Voice-Translator-NVIDIA-Large-Offline",
+}
+application_name = application_names[package_mode]
+
+runtime_hooks = []
+if not is_nvidia_package:
+    runtime_hooks.append(
+        str(project_root / "packaging" / "runtime_force_cpu.py")
+    )
 
 a = Analysis(
     [str(project_root / "main.py")],
@@ -82,9 +104,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[
-        str(project_root / "packaging" / "runtime_force_cpu.py"),
-    ],
+    runtime_hooks=runtime_hooks,
     excludes=[],
     noarchive=False,
     optimize=0,

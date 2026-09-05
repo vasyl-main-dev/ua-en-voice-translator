@@ -13,8 +13,10 @@ from faster_whisper.utils import download_model
 from huggingface_hub import snapshot_download
 
 from app.services.model_store import (
+    DEFAULT_SPEECH_MODEL,
     TRANSLATION_MODEL_DIRECTORY_NAME,
     TRANSLATION_MODEL_NAME,
+    WHISPER_REPOSITORIES,
 )
 
 
@@ -28,22 +30,29 @@ def parse_arguments() -> argparse.Namespace:
         required=True,
         help="Destination local_models directory.",
     )
+    parser.add_argument(
+        "--speech-model",
+        choices=tuple(WHISPER_REPOSITORIES),
+        default=DEFAULT_SPEECH_MODEL,
+        help="Whisper model to include in the offline package.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     arguments = parse_arguments()
     output_directory = arguments.output.resolve()
-    speech_directory = output_directory / "speech" / "medium"
+    speech_model = arguments.speech_model
+    speech_directory = output_directory / "speech" / speech_model
     translation_directory = (
         output_directory
         / "translation"
         / TRANSLATION_MODEL_DIRECTORY_NAME
     )
 
-    print("Downloading Whisper medium...")
+    print(f"Downloading Whisper {speech_model}...")
     speech_directory.mkdir(parents=True, exist_ok=True)
-    download_model("medium", output_dir=str(speech_directory))
+    download_model(speech_model, output_dir=str(speech_directory))
 
     print("Downloading NLLB-200 distilled 600M...")
     translation_directory.mkdir(parents=True, exist_ok=True)

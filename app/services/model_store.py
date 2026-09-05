@@ -5,16 +5,31 @@ from pathlib import Path
 from app.core.paths import (
     bundled_models_directory,
     is_offline_bundle,
+    package_manifest,
     writable_models_directory,
 )
 
 
 TRANSLATION_MODEL_NAME = "facebook/nllb-200-distilled-600M"
 TRANSLATION_MODEL_DIRECTORY_NAME = "nllb-200-distilled-600M"
+DEFAULT_SPEECH_MODEL = "large-v3"
 WHISPER_REPOSITORIES = {
     "small": "Systran/faster-whisper-small",
     "medium": "Systran/faster-whisper-medium",
+    "large-v3": "Systran/faster-whisper-large-v3",
 }
+
+
+def configured_speech_model() -> str:
+    model_name = package_manifest().get(
+        "speech_model",
+        DEFAULT_SPEECH_MODEL,
+    )
+    if model_name not in WHISPER_REPOSITORIES:
+        raise ValueError(
+            f"Непідтримувана Whisper-модель у пакеті: {model_name}"
+        )
+    return model_name
 
 
 class ModelUnavailableError(RuntimeError):
@@ -118,4 +133,3 @@ def _require_download_allowed(model_name: str) -> None:
         "Офлайн-пакет не містить потрібної моделі "
         f"{model_name}. Перевстановіть повний офлайн-пакет."
     )
-

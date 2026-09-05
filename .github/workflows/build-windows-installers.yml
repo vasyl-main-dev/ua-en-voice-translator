@@ -15,11 +15,15 @@ jobs:
   build:
     name: ${{ matrix.mode }} installer
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
-        mode: [online, offline]
+        mode:
+          - online
+          - offline
+          - nvidia-large-online
+          - nvidia-large-offline
 
     steps:
       - name: Check out repository
@@ -33,6 +37,7 @@ jobs:
           cache-dependency-path: |
             requirements-common.txt
             requirements-cpu.txt
+            requirements-nvidia.txt
             requirements-build.txt
 
       - name: Install Inno Setup
@@ -49,8 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ua-en-voice-translator-${{ matrix.mode }}-installer
-          path: installer_output/*.exe
+          path: installer_output/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-
