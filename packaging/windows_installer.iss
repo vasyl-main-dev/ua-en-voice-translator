@@ -30,8 +30,13 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\installer_output
 OutputBaseFilename=UA-EN-Voice-Translator-{#PackageMode}-Setup-{#ApplicationVersion}
+#if PackageMode == "offline"
+Compression=lzma2/fast
+SolidCompression=no
+#else
 Compression=lzma2/ultra64
 SolidCompression=yes
+#endif
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#ExecutableName}
 
