@@ -3,11 +3,22 @@ import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.core.paths import resource_root
+from app.core.runtime import detect_compute_profile
 from app.ui.main_window import MainWindow
 
 
 
-def main() -> None:
+def run_runtime_check() -> int:
+    """Verify the frozen universal build cannot select CUDA."""
+
+    profile = detect_compute_profile()
+    return 0 if profile.device == "cpu" else 2
+
+
+def main() -> int:
+    if "--runtime-check" in sys.argv:
+        return run_runtime_check()
+
     application = QApplication(sys.argv)
     stylesheet_path = resource_root() / "app" / "ui" / "styles.qss"
 
@@ -29,8 +40,8 @@ def main() -> None:
         raise
     window.show()
 
-    sys.exit(application.exec())
+    return application.exec()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

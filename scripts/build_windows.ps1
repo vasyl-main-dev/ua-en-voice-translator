@@ -34,6 +34,24 @@ if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller failed with exit code $LASTEXITCODE."
 }
 
+$ApplicationDirectoryName = if ($Mode -eq "offline") {
+    "UA-EN-Voice-Translator-Offline"
+} else {
+    "UA-EN-Voice-Translator-Online"
+}
+$ApplicationExecutable = Join-Path `
+    $ProjectRoot `
+    "dist\$ApplicationDirectoryName\$ApplicationDirectoryName.exe"
+
+# Deliberately request CUDA. The universal build's runtime hook must override
+# it before application imports and still report a healthy CPU profile.
+$env:VOICE_TRANSLATOR_DEVICE = "cuda"
+& $ApplicationExecutable --runtime-check
+if ($LASTEXITCODE -ne 0) {
+    throw "Packaged CPU runtime check failed with exit code $LASTEXITCODE."
+}
+Remove-Item Env:VOICE_TRANSLATOR_DEVICE -ErrorAction SilentlyContinue
+
 $InnoSetupCompiler = Join-Path `
     ${env:ProgramFiles(x86)} `
     "Inno Setup 6\ISCC.exe"
