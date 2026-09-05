@@ -27,7 +27,6 @@ class SpeechRecognizer:
         profile: ComputeProfile | None = None,
     ) -> None:
         self.profile = profile or detect_compute_profile()
-        self._automatic_model_size = model_size is None
         self.model_size = model_size or self._recommended_model_size()
         self.model: WhisperModel | None = None
         self.fallback_reason: str | None = None
@@ -129,12 +128,14 @@ class SpeechRecognizer:
         self.fallback_reason = str(error)
         print(
             "Не вдалося запустити Whisper через CUDA. "
-            "Автоматично перемикаємося на CPU."
+            "Автоматично перемикаємося на CPU. "
+            f"Причина: {error}"
         )
         self.model = None
         self.profile = cpu_compute_profile()
-        if self._automatic_model_size:
-            self.model_size = self._recommended_model_size()
+        # Keep the already downloaded model. In particular, a CUDA failure
+        # must not silently replace Whisper medium with the less accurate
+        # small model. Medium can also run on CPU with int8, although slower.
 
     def _recommended_model_size(self) -> str:
         if self.profile.device == "cuda":

@@ -87,6 +87,20 @@ automatically retries Whisper on the CPU instead of terminating.
 
 ## Run
 
+Install one dependency profile before starting the source version:
+
+```powershell
+# Universal CPU mode (the safe default for any Windows computer)
+python -m pip install -r requirements.txt
+
+# Or NVIDIA acceleration with CUDA 12 libraries and Whisper medium
+python -m pip install -r requirements-nvidia.txt
+```
+
+Do not install `requirements.txt` again after selecting the NVIDIA profile:
+it intentionally installs the CPU build of PyTorch. To restore NVIDIA mode,
+run the second command above again.
+
 ```powershell
 python main.py
 ```
@@ -98,10 +112,12 @@ after 12 seconds with a short overlap, and repeated overlap words are removed.
 Press **Stop** to finish recording and process the remaining queued audio.
 
 The first phrase can take longer because Whisper and the translation model
-are loaded lazily. NVIDIA mode uses Whisper `medium`; CPU mode uses Whisper
-`small`. Translation uses `facebook/nllb-200-distilled-600M`. On CPU-only
-computers, live results may lag behind speech; the exact delay depends on
-processor performance.
+are loaded lazily. NVIDIA mode uses Whisper `medium`; an application that
+starts directly in CPU mode uses Whisper `small`. If CUDA fails after medium
+has been downloaded, the same medium model is retried on CPU instead of being
+replaced by small. Translation uses `facebook/nllb-200-distilled-600M`. On
+CPU-only computers, live results may lag behind speech; the exact delay
+depends on processor performance.
 
 ## Runtime override
 
