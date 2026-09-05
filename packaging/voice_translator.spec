@@ -82,7 +82,9 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[
+        str(project_root / "packaging" / "runtime_force_cpu.py"),
+    ],
     excludes=[],
     noarchive=False,
     optimize=0,

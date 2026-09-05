@@ -18,6 +18,18 @@ class DetectComputeProfileTests(unittest.TestCase):
 
         self.assertEqual(profile.device, "cpu")
 
+    @patch("app.core.runtime.package_manifest", return_value={})
+    @patch("app.core.runtime.is_frozen_application", return_value=True)
+    def test_frozen_package_without_manifest_defaults_to_cpu(
+        self,
+        _is_frozen,
+        _manifest,
+    ) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            profile = detect_compute_profile()
+
+        self.assertEqual(profile.device, "cpu")
+
     def test_cpu_can_be_forced(self) -> None:
         with patch.dict(
             os.environ,

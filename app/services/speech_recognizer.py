@@ -69,8 +69,31 @@ class SpeechRecognizer:
         language: str,
         initial_prompt: str | None = None,
     ) -> str:
-        model = self._get_model()
+        try:
+            return self._transcribe_with_current_model(
+                audio,
+                language,
+                initial_prompt,
+            )
+        except (OSError, RuntimeError) as error:
+            # CTranslate2 can postpone loading CUDA DLLs until the first
+            # inference. Constructor-only fallback is therefore not enough.
+            if self.profile.device != "cuda":
+                raise
+            self._switch_to_cpu(error)
+            return self._transcribe_with_current_model(
+                audio,
+                language,
+                initial_prompt,
+            )
 
+    def _transcribe_with_current_model(
+        self,
+        audio,
+        language: str,
+        initial_prompt: str | None,
+    ) -> str:
+        model = self._get_model()
         segments, _ = model.transcribe(
             audio=audio,
             language=language,
@@ -80,13 +103,11 @@ class SpeechRecognizer:
             condition_on_previous_text=False,
             initial_prompt=initial_prompt,
         )
-
         recognized_parts = [
             segment.text.strip()
             for segment in segments
             if segment.text.strip()
         ]
-
         return " ".join(recognized_parts)
 
     def _get_model(self) -> WhisperModel:
@@ -101,16 +122,19 @@ class SpeechRecognizer:
         except (OSError, RuntimeError) as error:
             if self.profile.device != "cuda":
                 raise
-
-            self.fallback_reason = str(error)
-            print(
-                "Не вдалося запустити Whisper через CUDA. "
-                "Автоматично перемикаємося на CPU."
-            )
-            self.profile = cpu_compute_profile()
-            if self._automatic_model_size:
-                self.model_size = self._recommended_model_size()
+            self._switch_to_cpu(error)
             return self._create_model(self.profile)
+
+    def _switch_to_cpu(self, error: Exception) -> None:
+        self.fallback_reason = str(error)
+        print(
+            "Не вдалося запустити Whisper через CUDA. "
+            "Автоматично перемикаємося на CPU."
+        )
+        self.model = None
+        self.profile = cpu_compute_profile()
+        if self._automatic_model_size:
+            self.model_size = self._recommended_model_size()
 
     def _recommended_model_size(self) -> str:
         if self.profile.device == "cuda":

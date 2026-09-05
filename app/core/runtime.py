@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.core.paths import package_manifest
+from app.core.paths import is_frozen_application, package_manifest
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +81,9 @@ def detect_compute_profile() -> ComputeProfile:
         return cpu_compute_profile()
 
     packaged_profile = package_manifest().get("runtime_profile")
-    if packaged_profile == "cpu":
+    if packaged_profile == "cpu" or (
+        is_frozen_application() and packaged_profile != "cuda"
+    ):
         if requested_device == "cuda":
             raise RuntimeError(
                 "Цей універсальний інсталятор містить CPU-версію. "
