@@ -138,9 +138,7 @@ class SpeechRecognizer:
         # small model. Medium can also run on CPU with int8, although slower.
 
     def _recommended_model_size(self) -> str:
-        if self.profile.device == "cuda":
-            return "medium"
-        return "small"
+        return "medium"
 
     def _create_model(self, profile: ComputeProfile) -> WhisperModel:
         print(f"Завантаження Whisper-моделі: {self.model_size}")

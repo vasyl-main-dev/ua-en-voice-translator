@@ -34,16 +34,16 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> None:
     arguments = parse_arguments()
     output_directory = arguments.output.resolve()
-    speech_directory = output_directory / "speech" / "small"
+    speech_directory = output_directory / "speech" / "medium"
     translation_directory = (
         output_directory
         / "translation"
         / TRANSLATION_MODEL_DIRECTORY_NAME
     )
 
-    print("Downloading Whisper small...")
+    print("Downloading Whisper medium...")
     speech_directory.mkdir(parents=True, exist_ok=True)
-    download_model("small", output_dir=str(speech_directory))
+    download_model("medium", output_dir=str(speech_directory))
 
     print("Downloading NLLB-200 distilled 600M...")
     translation_directory.mkdir(parents=True, exist_ok=True)

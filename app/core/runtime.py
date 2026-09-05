@@ -111,7 +111,7 @@ def detect_compute_profile() -> ComputeProfile:
     if cuda_available:
         return ComputeProfile(
             device="cuda",
-            compute_type="float16",
+            compute_type="int8_float16",
             accelerator="nvidia",
         )
 

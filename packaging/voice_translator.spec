@@ -31,7 +31,7 @@ manifest_path.write_text(
         {
             "package_mode": package_mode,
             "runtime_profile": "cpu",
-            "speech_model": "small",
+            "speech_model": "medium",
             "translation_model": "facebook/nllb-200-distilled-600M",
         },
         ensure_ascii=False,

@@ -25,7 +25,8 @@ supports CUDA acceleration only on NVIDIA hardware.
 - Python 3.14;
 - a working microphone;
 - internet access on the first launch to download AI models;
-- approximately 6–10 GB of free disk space for dependencies and models.
+- approximately 8–12 GB of free disk space for dependencies and models;
+- 16 GB of RAM recommended for Whisper `medium` together with NLLB-200.
 
 After the models have been downloaded, recognition and translation work
 offline.
@@ -40,10 +41,10 @@ processors. Windows on ARM is not supported yet.
 The automated Windows build produces two universal CPU installers. They run
 on supported Intel and AMD processors and do not require Python or PyCharm.
 
-- **Online** is the smaller download. It downloads Whisper `small` and
+- **Online** is the smaller download. It downloads Whisper `medium` and
   NLLB-200 on first use, stores them in
   `%LOCALAPPDATA%\UA-EN Voice Translator\models`, and then works offline.
-- **Offline** contains Whisper `small` and NLLB-200. It can be installed and
+- **Offline** contains Whisper `medium` and NLLB-200. It can be installed and
   used without an internet connection, but the installer is several
   gigabytes large.
 
@@ -93,7 +94,7 @@ Install one dependency profile before starting the source version:
 # Universal CPU mode (the safe default for any Windows computer)
 python -m pip install -r requirements.txt
 
-# Or NVIDIA acceleration with CUDA 12 libraries and Whisper medium
+# Or NVIDIA acceleration with CUDA 12 libraries
 python -m pip install -r requirements-nvidia.txt
 ```
 
@@ -112,12 +113,13 @@ after 12 seconds with a short overlap, and repeated overlap words are removed.
 Press **Stop** to finish recording and process the remaining queued audio.
 
 The first phrase can take longer because Whisper and the translation model
-are loaded lazily. NVIDIA mode uses Whisper `medium`; an application that
-starts directly in CPU mode uses Whisper `small`. If CUDA fails after medium
-has been downloaded, the same medium model is retried on CPU instead of being
-replaced by small. Translation uses `facebook/nllb-200-distilled-600M`. On
-CPU-only computers, live results may lag behind speech; the exact delay
-depends on processor performance.
+are loaded lazily. Whisper `medium` is the default on both CPU and NVIDIA.
+NVIDIA uses `int8_float16` to reduce VRAM usage on modest compatible GPUs;
+CPU uses `int8`. If CUDA fails, the same medium model is retried on CPU.
+Translation uses `facebook/nllb-200-distilled-600M`. On CPU-only computers,
+live results may lag behind speech; the exact delay depends on processor
+performance. 16 GB of RAM is recommended; 8 GB systems are not guaranteed to
+keep both AI models resident without exhausting memory.
 
 ## Runtime override
 

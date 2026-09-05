@@ -65,7 +65,7 @@ class DetectComputeProfileTests(unittest.TestCase):
             profile = detect_compute_profile()
 
         self.assertEqual(profile.device, "cuda")
-        self.assertEqual(profile.compute_type, "float16")
+        self.assertEqual(profile.compute_type, "int8_float16")
 
     @patch(
         "app.core.runtime._windows_cuda_libraries_loadable",
