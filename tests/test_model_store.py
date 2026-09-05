@@ -9,6 +9,16 @@ from app.services import model_store
 
 
 class ModelStoreTests(unittest.TestCase):
+    @patch(
+        "app.services.model_store.package_manifest",
+        return_value={"speech_model": "large-v3"},
+    )
+    def test_package_can_select_large_v3(self, _manifest) -> None:
+        self.assertEqual(
+            model_store.configured_speech_model(),
+            "large-v3",
+        )
+
     def test_complete_speech_model_is_reused(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             model_directory = Path(temporary_directory) / "speech" / "small"
@@ -38,4 +48,3 @@ class ModelStoreTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

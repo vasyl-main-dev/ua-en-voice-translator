@@ -9,7 +9,10 @@ from app.core.runtime import (
     detect_compute_profile,
     prepare_windows_dll_search_path,
 )
-from app.services.model_store import ensure_speech_model
+from app.services.model_store import (
+    configured_speech_model,
+    ensure_speech_model,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -138,7 +141,7 @@ class SpeechRecognizer:
         # small model. Medium can also run on CPU with int8, although slower.
 
     def _recommended_model_size(self) -> str:
-        return "medium"
+        return configured_speech_model()
 
     def _create_model(self, profile: ComputeProfile) -> WhisperModel:
         print(f"Завантаження Whisper-моделі: {self.model_size}")

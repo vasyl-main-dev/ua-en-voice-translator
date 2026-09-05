@@ -1,6 +1,11 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("online", "offline")]
+    [ValidateSet(
+        "online",
+        "offline",
+        "nvidia-large-online",
+        "nvidia-large-offline"
+    )]
     [string]$Mode
 )
 
@@ -12,14 +17,24 @@ if ($env:OS -ne "Windows_NT") {
     throw "Windows installers must be built on Windows."
 }
 
-python -m pip install -r requirements-cpu.txt -r requirements-build.txt
+$IsNvidiaPackage = $Mode.StartsWith("nvidia-large-")
+$IsOfflinePackage = $Mode.EndsWith("offline")
+$SpeechModel = if ($IsNvidiaPackage) { "large-v3" } else { "medium" }
+$RuntimeRequirements = if ($IsNvidiaPackage) {
+    "requirements-nvidia.txt"
+} else {
+    "requirements-cpu.txt"
+}
+
+python -m pip install -r $RuntimeRequirements -r requirements-build.txt
 if ($LASTEXITCODE -ne 0) {
     throw "Dependency installation failed with exit code $LASTEXITCODE."
 }
 
-if ($Mode -eq "offline") {
+if ($IsOfflinePackage) {
     python scripts/download_offline_models.py `
-        --output build/offline_models
+        --output build/offline_models `
+        --speech-model $SpeechModel
     if ($LASTEXITCODE -ne 0) {
         throw "Offline model download failed with exit code $LASTEXITCODE."
     }
@@ -34,21 +49,32 @@ if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller failed with exit code $LASTEXITCODE."
 }
 
-$ApplicationDirectoryName = if ($Mode -eq "offline") {
-    "UA-EN-Voice-Translator-Offline"
-} else {
-    "UA-EN-Voice-Translator-Online"
+$ApplicationDirectoryNames = @{
+    "online" = "UA-EN-Voice-Translator-Online"
+    "offline" = "UA-EN-Voice-Translator-Offline"
+    "nvidia-large-online" = "UA-EN-Voice-Translator-NVIDIA-Large-Online"
+    "nvidia-large-offline" = "UA-EN-Voice-Translator-NVIDIA-Large-Offline"
 }
+$ApplicationDirectoryName = $ApplicationDirectoryNames[$Mode]
 $ApplicationExecutable = Join-Path `
     $ProjectRoot `
     "dist\$ApplicationDirectoryName\$ApplicationDirectoryName.exe"
 
-# Deliberately request CUDA. The universal build's runtime hook must override
-# it before application imports and still report a healthy CPU profile.
-$env:VOICE_TRANSLATOR_DEVICE = "cuda"
-& $ApplicationExecutable --runtime-check
-if ($LASTEXITCODE -ne 0) {
-    throw "Packaged CPU runtime check failed with exit code $LASTEXITCODE."
+# GitHub's hosted Windows runner has no NVIDIA GPU. Universal packages can be
+# fully runtime-checked there; NVIDIA packages receive a metadata/import smoke
+# check and are then tested manually on real discrete GPUs.
+if ($IsNvidiaPackage) {
+    $env:VOICE_TRANSLATOR_DEVICE = "cpu"
+    & $ApplicationExecutable --package-check
+    if ($LASTEXITCODE -ne 0) {
+        throw "Packaged NVIDIA metadata check failed with exit code $LASTEXITCODE."
+    }
+} else {
+    $env:VOICE_TRANSLATOR_DEVICE = "cuda"
+    & $ApplicationExecutable --runtime-check
+    if ($LASTEXITCODE -ne 0) {
+        throw "Packaged CPU runtime check failed with exit code $LASTEXITCODE."
+    }
 }
 Remove-Item Env:VOICE_TRANSLATOR_DEVICE -ErrorAction SilentlyContinue
 
