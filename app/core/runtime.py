@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ctypes
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.core.paths import is_frozen_application, package_manifest
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +24,7 @@ class ComputeProfile:
 
 
 _dll_directory_handles: list[object] = []
+_cuda_library_handles: list[object] = []
 
 
 def prepare_windows_dll_search_path() -> None:
@@ -78,6 +82,17 @@ def detect_compute_profile() -> ComputeProfile:
     if requested_device == "cpu":
         return cpu_compute_profile()
 
+    packaged_profile = package_manifest().get("runtime_profile")
+    if packaged_profile == "cpu" or (
+        is_frozen_application() and packaged_profile != "cuda"
+    ):
+        if requested_device == "cuda":
+            raise RuntimeError(
+                "Цей універсальний інсталятор містить CPU-версію. "
+                "Для CUDA потрібна окрема NVIDIA-збірка."
+            )
+        return cpu_compute_profile()
+
     prepare_windows_dll_search_path()
 
     try:
@@ -87,10 +102,16 @@ def detect_compute_profile() -> ComputeProfile:
     except (ImportError, OSError, RuntimeError):
         cuda_available = False
 
+    # CTranslate2 can see an NVIDIA device even when the active Python
+    # environment only contains the CPU build of PyTorch. On Windows the
+    # actual failure then appears later, during the first transcription.
+    if cuda_available and os.name == "nt":
+        cuda_available = _windows_cuda_libraries_loadable()
+
     if cuda_available:
         return ComputeProfile(
             device="cuda",
-            compute_type="float16",
+            compute_type="int8_float16",
             accelerator="nvidia",
         )
 
@@ -108,3 +129,21 @@ def cpu_compute_profile() -> ComputeProfile:
         compute_type="int8",
         accelerator="cpu",
     )
+
+
+def _windows_cuda_libraries_loadable() -> bool:
+    """Return whether CTranslate2's required CUDA 12 DLLs can be loaded."""
+
+    required_libraries = (
+        "cublas64_12.dll",
+        "cudnn64_9.dll",
+    )
+
+    try:
+        for library_name in required_libraries:
+            handle = ctypes.WinDLL(library_name)
+            _cuda_library_handles.append(handle)
+    except (AttributeError, OSError):
+        return False
+
+    return True
